@@ -48,7 +48,7 @@ start_emanetransportd()
 
         echo "Starting emanetransport: $xml"
 
-        emanetransportd -r -d "$xml" -l 3 -f "$logfile" \
+        emanetransportd -r -d "$xml" -l 4 -f "$logfile" \
                         --pidfile "$pidfile" --uuidfile "$uuidfile"
 
         retval=$?
@@ -76,7 +76,7 @@ start_emaneeventd_and_wait_for_gpspty()
 
         rm -f "$pty"
 
-        emaneeventd -r -d "$xml" -l 3 -f "$logfile" \
+        emaneeventd -r -d "$xml" -l 4 -f "$logfile" \
                     --pidfile "$pidfile" --uuidfile "$uuidfile"
 
         retval=$?
@@ -110,7 +110,7 @@ start_emane()
 
         echo "Starting emane: $xml"
 
-        emane "$xml" -r -d -l 3 -f "$logfile" \
+        emane "$xml" -r -d -l 4 -f "$logfile" \
               --pidfile "$pidfile" --uuidfile "$uuidfile"
 
         retval=$?
@@ -154,6 +154,32 @@ start_mgen()
     echo $! > $pidfile
 }
 
+start_mgen_mod()
+{
+    local mgeninput=$1
+    local mgenoutput=$2
+    local pidfile=$3
+    local logfile=$4
+    local starttime="$5"
+    local nodeId="$6" 
+    local nodecount="$7"
+
+    local startoption=""
+
+    if [ -n "$starttime" ]; then
+        startoption="$(date --date "$starttime" "+%H:%M:%S" --utc)GMT"
+        echo "Starting mgen: input $mgeninput output $mgenoutput $startoption"
+    else
+        echo "Starting mgen: input $mgeninput output $mgenoutput now"
+    fi
+
+    nohup python -u $mgeninput    \
+          $startoption $nodeId $nodecount \
+           &> $logfile &
+
+    echo $! > $pidfile
+}
+
 start_otestpointd()
 {
     local xml=$1
@@ -165,7 +191,7 @@ start_otestpointd()
 
         echo "Starting otestpointd: $xml"
 
-        otestpointd "$xml" -d -l 3 -f "$logfile" \
+        otestpointd "$xml" -d -l 4 -f "$logfile" \
                     --pidfile "$pidfile" --uuidfile "$uuidfile"
 
         retval=$?
@@ -188,7 +214,7 @@ start_otestpoint_recorder()
 
         echo "Starting otestpoint-recorder: $xml"
 
-        otestpoint-recorder "$xml" -d -l 3 -f "$logfile" \
+        otestpoint-recorder "$xml" -d -l 4 -f "$logfile" \
                             --pidfile "$pidfile" --uuidfile "$uuidfile"
 
         retval=$?
@@ -211,7 +237,7 @@ start_otestpoint_broker()
 
         echo "Starting otestpoint-broker: $xml"
 
-        otestpoint-broker "$xml" -d -l 3 -f "$logfile" \
+        otestpoint-broker "$xml" -d -l 4 -f "$logfile" \
                           --pidfile "$pidfile" --uuidfile "$uuidfile"
 
         retval=$?
@@ -333,7 +359,7 @@ done
 
 shift $((OPTIND-1))
 
-if [ $#  -ne 2 ]
+if [ $#  -ne 3 ]
 then
     echo "Invalid number of arguments" >&2
     exit 1
@@ -349,6 +375,7 @@ fi
 
 
 nodeId=$2
+nodecount=$3
 
 # fix devpts
 mount /dev/pts -o remount,rw,mode=620,ptmxmode=666,gid=5
@@ -485,7 +512,25 @@ then
 
 fi
 
-if [ -f mgen$nodeId ] &&
+if [ -f mgen_fifo$nodeId.py ] &&
+       [ ! -f NO-node-mgen$nodeId ] &&
+       [ ! -f NO-node-mgen ]
+then
+
+    if [ -f  $PWD/persist/$nodeId/var/run/transportdaemon.pid ]
+    then
+        wait_for_device emane0 10
+    fi
+
+    start_mgen_mod \
+        mgen_fifo$nodeId.py \
+        $PWD/persist/$nodeId/var/log/mgen.out \
+        $PWD/persist/$nodeId/var/run/mgen.pid \
+        $PWD/persist/$nodeId/var/log/mgen.log \
+        "$starttime" \
+        "$nodeId" "$nodecount"\
+
+elif [ -f mgen$nodeId ] &&
        [ ! -f NO-node-mgen$nodeId ] &&
        [ ! -f NO-node-mgen ]
 then
